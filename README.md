@@ -48,5 +48,5 @@ La aplicación permite a los agentes de entrega seleccionar paquetes asignados, 
     *Nota: Si ejecutas en Web, usar Chrome. Si es en Android, asegurar que el emulador tenga conexión.*
 
 ## 👤 Autor
-[Tu Nombre Completo Aquí]
+[Carlos Augusto Rodriguez Alvarado]
 Evaluación de la Unidad 3 - Desarrollo de Aplicaciones Móviles.
