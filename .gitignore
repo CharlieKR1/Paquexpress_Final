@@ -1,0 +1,20 @@
+# Archivos de Sistema
+.DS_Store
+Thumbs.db
+
+# Python / FastAPI
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+/backend/evidencias/*.jpg  # Opcional: Para no subir las fotos de prueba
+
+# Flutter / Dart
+/app_movil/.dart_tool/
+/app_movil/.idea/
+/app_movil/build/
+/app_movil/android/.gradle
+/app_movil/ios/.symlinks
+/app_movil/flutter_export.pdf

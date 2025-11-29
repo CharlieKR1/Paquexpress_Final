@@ -1,12 +1,12 @@
 import 'dart:convert';
-import 'dart:typed_data'; // Necesario para manejar bytes en Web
+import 'dart:typed_data'; // Necesario para Web/Windows
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
-// CONFIGURACIÓN PARA(LOCALHOST)
+// CONFIGURACIÓN (LOCALHOST)
 const String baseUrl = "http://127.0.0.1:8000"; 
 
 void main() => runApp(const MyApp());
@@ -55,9 +55,9 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Login Agente")),
-      body: Center( // Centrado para que se vea mejor
+      body: Center(
         child: Container(
-          width: 400, // Limitamos ancho para que no se estire en monitores
+          width: 400,
           padding: const EdgeInsets.all(16.0),
           child: Column(children: [
             TextField(controller: _userController, decoration: const InputDecoration(labelText: "Usuario")),
@@ -99,25 +99,61 @@ class _PackageListPageState extends State<PackageListPage> {
 
   Future<void> entregar(int id) async {
     final ImagePicker picker = ImagePicker();
-    // En Web, pickImage abre el selector de archivos del navegador
-    final XFile? photo = await picker.pickImage(source: ImageSource.camera); 
+    final XFile? photo = await picker.pickImage(source: ImageSource.camera);
     
     if (photo != null) {
+      final Uint8List bytes = await photo.readAsBytes();
+
+      if (!mounted) return;
+      
+      // Diálogo de confirmación
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text("Confirmar Evidencia"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text("¿Deseas enviar esta fotografía?"),
+                const SizedBox(height: 10),
+                Image.memory(bytes, height: 200, fit: BoxFit.cover),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text("Cancelar", style: TextStyle(color: Colors.red)),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop(); 
+                  _subirFoto(id, bytes); 
+                },
+                child: const Text("ENVIAR"),
+              ),
+            ],
+          );
+        },
+      );
+    }
+  }
+
+  Future<void> _subirFoto(int id, Uint8List bytes) async {
+    try {
       var request = http.MultipartRequest('POST', Uri.parse("$baseUrl/entregar/"));
       request.fields['paquete_id'] = id.toString();
-
-      Uint8List data = await photo.readAsBytes();
-      List<int> list = data.cast();
-      request.files.add(http.MultipartFile.fromBytes('file', list, filename: 'entrega.jpg'));
-      // ----------------------------------
-
+      request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'entrega.jpg'));
+      
       var response = await request.send();
       if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Entrega registrada")));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Entrega registrada exitosamente")));
         loadPackages(); 
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al subir")));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al registrar entrega")));
       }
+    } catch (e) {
+      print("Error subiendo: $e");
     }
   }
 
@@ -131,21 +167,24 @@ class _PackageListPageState extends State<PackageListPage> {
             itemCount: packages.length,
             itemBuilder: (ctx, i) {
               var p = packages[i];
-              // Convertimos a double seguro
-              double lat = double.parse(p['latitud_destino'].toString());
-              double lng = double.parse(p['longitud_destino'].toString());
+              double lat = double.tryParse(p['latitud_destino'].toString()) ?? 0.0;
+              double lng = double.tryParse(p['longitud_destino'].toString()) ?? 0.0;
+              
+              // Verificamos si ya está entregado para cambiar el estilo del botón
+              bool entregado = p['estado'] == 'entregado';
 
               return Card(
                 margin: const EdgeInsets.all(10),
+                elevation: 4,
                 child: Column(
                   children: [
                     ListTile(
-                      leading: Icon(Icons.local_shipping, color: p['estado'] == 'entregado' ? Colors.green : Colors.orange),
+                      leading: Icon(Icons.local_shipping, color: entregado ? Colors.green : Colors.orange),
                       title: Text("Guía: ${p['tracking_number']}"),
                       subtitle: Text("${p['direccion_destino']} (${p['estado']})"),
                     ),
                     SizedBox(
-                      height: 300,
+                      height: 200, 
                       child: FlutterMap( 
                         options: MapOptions(
                           initialCenter: LatLng(lat, lng), 
@@ -167,19 +206,21 @@ class _PackageListPageState extends State<PackageListPage> {
                         ],
                       ),
                     ),
-                    if (p['estado'] == 'pendiente')
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: ElevatedButton.icon(
-                          onPressed: () => entregar(p['id']), 
-                          icon: const Icon(Icons.camera_alt),
-                          label: const Text("📸 Subir Evidencia"),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            foregroundColor: Colors.white,
-                          ),
+                    
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: ElevatedButton.icon(
+                        onPressed: () => entregar(p['id']), 
+                        icon: const Icon(Icons.camera_alt),
+                        // Cambia el texto según el estado
+                        label: Text(entregado ? "📸 Actualizar Evidencia" : "📸 Entregar Paquete"),
+                        style: ElevatedButton.styleFrom(
+                          // Cambia el color: Azul si falta, Gris si ya está
+                          backgroundColor: entregado ? Colors.grey : Colors.blue,
+                          foregroundColor: Colors.white,
                         ),
                       ),
+                    ),
                     const SizedBox(height: 10),
                   ],
                 ),
